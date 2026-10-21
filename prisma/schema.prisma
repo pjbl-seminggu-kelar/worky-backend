@@ -13,10 +13,10 @@ generator client {
 // ENUMS
 // ==========================================
 enum WorkoutGoal {
+  WEIGHT_LOSS          @map("weight_loss")
+  MUSCLE_BUILDING      @map("muscle_building")
+  STRENGTH             @map("strength")
   GENERAL_FITNESS      @map("general_fitness")
-  STRENGTH_DEVELOPMENT @map("strength_development")
-  MUSCULAR_ENDURANCE   @map("muscular_endurance")
-  BUILDING_CONSISTENCY @map("building_workout_consistency")
 
   @@map("workout_goal")
 }

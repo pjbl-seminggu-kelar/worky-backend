@@ -13,9 +13,9 @@ export const updatePlanItemSchema = z.object({
 export const generatePlanSchema = z.object({
   name: z.string().optional(),
   goal: z.enum([
+    'WEIGHT_LOSS',
+    'MUSCLE_BUILDING',
+    'STRENGTH',
     'GENERAL_FITNESS',
-    'STRENGTH_DEVELOPMENT',
-    'MUSCULAR_ENDURANCE',
-    'BUILDING_CONSISTENCY',
   ]).optional(),
 });

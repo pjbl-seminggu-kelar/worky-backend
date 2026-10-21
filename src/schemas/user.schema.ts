@@ -1,14 +1,14 @@
 import { z } from 'zod';
 
 export const updateProfileSchema = z.object({
-  displayName: z.string().min(2, 'Nama minimal 2 karakter').optional(),
-  age: z.number().int().positive('Umur harus positif').optional(),
-  weightKg: z.number().positive('Berat badan harus positif').optional(),
+  displayName: z.string().min(2).optional(),
+  age: z.number().int().positive().optional(),
+  weightKg: z.number().positive().optional(),
   goal: z.enum([
+    'WEIGHT_LOSS',
+    'MUSCLE_BUILDING',
+    'STRENGTH',
     'GENERAL_FITNESS',
-    'STRENGTH_DEVELOPMENT',
-    'MUSCULAR_ENDURANCE',
-    'BUILDING_CONSISTENCY',
   ]).optional(),
   experienceLevel: z.enum(['BEGINNER', 'INTERMEDIATE', 'ADVANCED']).optional(),
   sessionsPerWeek: z.number().int().min(1).max(7).optional(),
