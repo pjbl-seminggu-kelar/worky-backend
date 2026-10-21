@@ -30,21 +30,27 @@ async function main() {
   });
   console.log(`User seeded: ${user.displayName}`);
 
-  // 2. Seed Master 6 Exercises
+  // 2. Seed Master 6 Exercises (Lengkap dengan imageUrl & Label 'Yang dicek AI')
   const exercisesData = [
     {
       slug: 'push_up',
       name: 'Push-up',
+      imageUrl: 'https://worky-web.vercel.app/pushup.png',
       category: 'UPPER' as const,
-      description: 'Dada / Tricep / Bahu',
+      description: 'Dada · Trisep · Bahu',
       instructions: [
         'Tangan selebar bahu, badan lurus.',
         'Turunkan dada hingga siku ±90°.',
         'Dorong kembali ke posisi awal.',
       ],
       equipmentRequired: [],
-      cameraGuidance: { position: 'Samping', distance: '2-3 m' },
-      supportedErrors: ['hip_alignment', 'insufficient_depth', 'head_down'],
+      cameraGuidance: { position: 'Samping', distance: '2–3 m' },
+      supportedErrors: [
+        'Pinggul turun',
+        'Pinggul terlalu tinggi',
+        'Turun kurang dalam',
+        'Kepala menunduk',
+      ],
       defaultSets: 3,
       defaultTargetReps: 12,
       defaultRestSeconds: 45,
@@ -54,18 +60,24 @@ async function main() {
     {
       slug: 'squat',
       name: 'Squat',
+      imageUrl: 'https://worky-web.vercel.app/squat.png',
       category: 'LOWER' as const,
-      description: 'Paha / Glutes / Core',
+      description: 'Paha · Glutes · Core',
       instructions: [
-        'Buka kaki selebar bahu.',
-        'Turunkan pinggul seperti hendak duduk hingga paha sejajar lantai.',
-        'Dorong tumit untuk kembali berdiri tegak.',
+        'Kaki selebar bahu.',
+        'Dorong pinggul ke belakang, turun',
+        'Paha sejajar lantai, lalu berdiri',
       ],
       equipmentRequired: [],
-      cameraGuidance: { position: 'Samping / Depan', distance: '2-3 m' },
-      supportedErrors: ['insufficient_depth', 'knee_inward', 'forward_lean'],
+      cameraGuidance: { position: 'Samping atau Depan', distance: '2–3 m' },
+      supportedErrors: [
+        'Lutut masuk ke dalam',
+        'Tumit terangkat',
+        'Punggung membungkuk',
+        'Turun kurang dalam',
+      ],
       defaultSets: 3,
-      defaultTargetReps: 15,
+      defaultTargetReps: 12,
       defaultRestSeconds: 45,
       cvStatus: 'EXPERIMENTAL' as const,
       modelVersion: 'v0.9.0',
@@ -73,18 +85,23 @@ async function main() {
     {
       slug: 'sit_up',
       name: 'Sit-up',
+      imageUrl: 'https://worky-web.vercel.app/situp.png',
       category: 'CORE' as const,
-      description: 'Otot Perut / Flexor Panggul',
+      description: 'Perut · Hip flexor',
       instructions: [
-        'Berbaring telentang dengan lutut ditekuk.',
-        'Angkat tubuh bagian atas menuju arah lutut.',
-        'Turunkan tubuh secara perlahan ke lantai.',
+        'Berbaring, lutut ditekuk.',
+        'Angkat badan ke arah lutut.',
+        'Turun perlahan terkontrol.',
       ],
       equipmentRequired: [],
       cameraGuidance: { position: 'Samping', distance: '2 m' },
-      supportedErrors: ['incomplete_rep', 'excessive_momentum'],
+      supportedErrors: [
+        'Menarik leher',
+        'Gerakan terlalu cepat',
+        'Rentang kurang penuh',
+      ],
       defaultSets: 3,
-      defaultTargetReps: 20,
+      defaultTargetReps: 12,
       defaultRestSeconds: 45,
       cvStatus: 'PLANNED' as const,
       modelVersion: 'v0.5.0',
@@ -92,16 +109,21 @@ async function main() {
     {
       slug: 'plank',
       name: 'Plank',
+      imageUrl: 'https://worky-web.vercel.app/plank.png',
       category: 'CORE' as const,
-      description: 'Stabilitas Otot Core',
+      description: 'Core · Bahu',
       instructions: [
-        'Posisikan siku di lantai tepat di bawah bahu.',
-        'Jaga tubuh tetap lurus dari kepala hingga tumit.',
-        'Tahan posisi sesuai target durasi.',
+        'Siku tepat di bawah bahu.',
+        'Badan lurus dari kepala ke tumit.',
+        'Tahan dan bernapas normal.',
       ],
       equipmentRequired: ['exercise_mat'],
       cameraGuidance: { position: 'Samping', distance: '2 m' },
-      supportedErrors: ['hip_alignment'],
+      supportedErrors: [
+        'Pinggul turun',
+        'Pinggul terlalu tinggi',
+        'Kepala menunduk',
+      ],
       defaultSets: 3,
       defaultTargetDurationSeconds: 45,
       defaultRestSeconds: 45,
@@ -111,16 +133,21 @@ async function main() {
     {
       slug: 'pull_up',
       name: 'Pull-up',
+      imageUrl: 'https://worky-web.vercel.app/pullup.png',
       category: 'UPPER' as const,
-      description: 'Punggung / Bicep / Bahu',
+      description: 'Punggung · Bisep · Bahu',
       instructions: [
         'Pegang pull-up bar dengan telapak tangan menghadap ke depan.',
         'Tarik tubuh ke atas hingga dagu melewati bar.',
         'Turunkan tubuh kembali secara perlahan ke posisi semula.',
       ],
       equipmentRequired: ['pull_up_bar'],
-      cameraGuidance: { position: 'Samping / Belakang', distance: '2-3 m' },
-      supportedErrors: ['incomplete_rep', 'excessive_kipping'],
+      cameraGuidance: { position: 'Samping / Belakang', distance: '2–3 m' },
+      supportedErrors: [
+        'Dagu tidak melewati bar',
+        'Ayun tubuh (kipping)',
+        'Rentang gerak tidak penuh',
+      ],
       defaultSets: 3,
       defaultTargetReps: 8,
       defaultRestSeconds: 60,
@@ -129,17 +156,22 @@ async function main() {
     },
     {
       slug: 'chair_dips',
-      name: 'Chair Dips',
+      name: 'Dips',
+      imageUrl: 'https://worky-web.vercel.app/dips.png',
       category: 'UPPER' as const,
-      description: 'Tricep / Bahu Depan / Dada',
+      description: 'Trisep · Bahu Depan · Dada',
       instructions: [
         'Duduk di tepi kursi yang stabil, letakkan tangan di samping panggul.',
         'Geser panggul ke depan dan tekuk siku hingga ±90°.',
-        'Dorong tubuh kembali ke atas menggunakan kekuatan tricep.',
+        'Dorong tubuh kembali ke atas menggunakan kekuatan trisep.',
       ],
       equipmentRequired: ['chair'],
       cameraGuidance: { position: 'Samping', distance: '2 m' },
-      supportedErrors: ['insufficient_depth', 'shoulder_flare'],
+      supportedErrors: [
+        'Turun kurang dalam',
+        'Siku mekar ke samping',
+        'Bahu terlalu naik',
+      ],
       defaultSets: 3,
       defaultTargetReps: 12,
       defaultRestSeconds: 45,
@@ -153,6 +185,10 @@ async function main() {
     const created = await prisma.exercise.upsert({
       where: { slug: ex.slug },
       update: {
+        imageUrl: ex.imageUrl,
+        description: ex.description,
+        supportedErrors: ex.supportedErrors,
+        instructions: ex.instructions,
         equipmentRequired: ex.equipmentRequired,
         category: ex.category,
         defaultSets: ex.defaultSets,
@@ -163,7 +199,7 @@ async function main() {
     });
     exercisesMap[ex.slug] = created.id;
   }
-  console.log('Master 6 exercises seeded successfully.');
+  console.log('Master 6 exercises seeded successfully with images and error badges.');
 
   // 3. Seed Active Workout Plan
   const plan = await prisma.workoutPlan.create({
@@ -195,7 +231,7 @@ async function main() {
         totalReps: 48,
         validReps: 42,
         invalidReps: 6,
-        activeDurationSeconds: 768, // 12:48
+        activeDurationSeconds: 768,
         validRepRate: 87.5,
         modelVersion: 'v1.0.0',
         status: 'COMPLETED',
@@ -208,7 +244,7 @@ async function main() {
         totalReps: 36,
         validReps: 32,
         invalidReps: 4,
-        activeDurationSeconds: 540, // 09:00
+        activeDurationSeconds: 540,
         validRepRate: 88.8,
         modelVersion: 'v0.1.0',
         status: 'COMPLETED',
@@ -221,7 +257,7 @@ async function main() {
         totalReps: 55,
         validReps: 50,
         invalidReps: 5,
-        activeDurationSeconds: 618, // 10:18
+        activeDurationSeconds: 618,
         validRepRate: 90.9,
         modelVersion: 'v1.0.0',
         status: 'COMPLETED',

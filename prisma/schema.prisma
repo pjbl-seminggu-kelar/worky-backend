@@ -104,24 +104,25 @@ model User {
 }
 
 model Exercise {
-  id                           String           @id @default(uuid()) @db.Uuid
-  slug                         String           @unique @db.VarChar(50)
-  name                         String           @db.VarChar(100)
-  category                     ExerciseCategory @default(FULL_BODY)
-  description                  String?          @db.Text
-  instructions                 Json?            @default("[]")
-  equipmentRequired            Json?            @default("[]")
-  cameraGuidance               Json?            @default("{}")
-  supportedErrors              Json?            @default("[]")
-  defaultSets                  Int              @default(3) @map("default_sets")
-  defaultTargetReps            Int?             @default(12) @map("default_target_reps")
+  id                            String           @id @default(uuid()) @db.Uuid
+  slug                          String           @unique @db.VarChar(50)
+  name                          String           @db.VarChar(100)
+  imageUrl                      String?          @map("image_url") // << TAMBAHKAN KOLOM INI
+  category                      ExerciseCategory @default(FULL_BODY)
+  description                   String?          @db.Text
+  instructions                  Json?            @default("[]")
+  equipmentRequired             Json?            @default("[]")
+  cameraGuidance                Json?            @default("{}")
+  supportedErrors               Json?            @default("[]")
+  defaultSets                   Int              @default(3) @map("default_sets")
+  defaultTargetReps             Int?             @default(12) @map("default_target_reps")
   defaultTargetDurationSeconds Int?             @map("default_target_duration_seconds")
-  defaultRestSeconds           Int              @default(45) @map("default_rest_seconds")
-  cvStatus                     CvStatus         @default(PLANNED) @map("cv_status")
-  modelVersion                 String?          @map("model_version") @db.VarChar(50)
-  isActive                     Boolean          @default(true) @map("is_active")
-  createdAt                    DateTime         @default(now()) @map("created_at")
-  updatedAt                    DateTime         @updatedAt @map("updated_at")
+  defaultRestSeconds            Int              @default(45) @map("default_rest_seconds")
+  cvStatus                      CvStatus         @default(PLANNED) @map("cv_status")
+  modelVersion                  String?          @map("model_version") @db.VarChar(50)
+  isActive                      Boolean          @default(true) @map("is_active")
+  createdAt                     DateTime         @default(now()) @map("created_at")
+  updatedAt                     DateTime         @updatedAt @map("updated_at")
 
   workoutPlanItems WorkoutPlanItem[]
   workoutSessions  WorkoutSession[]
