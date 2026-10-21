@@ -218,6 +218,7 @@ async function main() {
       },
     },
   });
+  
   console.log(`Workout plan seeded: ${plan.name}`);
 
   // 4. Seed Riwayat Workout Sessions
