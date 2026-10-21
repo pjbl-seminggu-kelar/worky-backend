@@ -33,20 +33,22 @@ export class ExerciseController {
     }
   }
 
-  static async getBySlug(req: Request, res: Response, next: NextFunction) {
-    try {
-      const { slug } = req.params;
-      const exercise = await prisma.exercise.findUnique({
-        where: { slug },
-      });
+ static async getBySlug(req: Request, res: Response, next: NextFunction) {
+  try {
+    // FIX: Ambil parameter slug dan cast ke tipe 'string'
+    const slug = req.params.slug as string;
 
-      if (!exercise) {
-        throw new AppError(404, 'Latihan tidak ditemukan');
-      }
+    const exercise = await prisma.exercise.findUnique({
+      where: { slug },
+    });
 
-      res.status(200).json({ status: 'success', data: exercise });
-    } catch (err) {
-      next(err);
+    if (!exercise) {
+      throw new AppError(404, 'Latihan tidak ditemukan');
     }
+
+    res.status(200).json({ status: 'success', data: exercise });
+  } catch (err) {
+    next(err);
   }
+}
 }

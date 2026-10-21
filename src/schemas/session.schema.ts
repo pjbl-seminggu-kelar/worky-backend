@@ -28,7 +28,7 @@ export const logEventsSchema = z.object({
       endMs: z.number().int().optional(),
       durationMs: z.number().int().optional(),
       confidence: z.number().optional(),
-      details: z.record(z.any()).optional(),
+      details: z.record(z.string(), z.any()).optional(),
     })
   ),
 });

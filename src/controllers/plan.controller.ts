@@ -28,7 +28,7 @@ export class PlanController {
   static async updatePlanItem(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const userId = req.user!.id;
-      const { itemId } = req.params;
+      const itemId = req.params.itemId as string;
       const validated = updatePlanItemSchema.parse(req.body);
       const updated = await PlanService.updatePlanItem(userId, itemId, validated);
       res.status(200).json({ status: 'success', data: updated });
