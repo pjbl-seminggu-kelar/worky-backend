@@ -1,8 +1,10 @@
 import { prisma } from '../config/db';
 import { AppError } from '../utils/errors';
+import { StreakService } from './streak.service';
 
 export class UserService {
   static async getProfile(userId: string) {
+    const streakInfo = await StreakService.checkAndTriggerDailyStreak(userId);
     const user = await prisma.user.findUnique({
       where: { id: userId },
       select: {
@@ -73,6 +75,7 @@ export class UserService {
 
     return {
       user,
+      streak: streakInfo,
       stats: {
         totalSessions,
         totalValidReps,
