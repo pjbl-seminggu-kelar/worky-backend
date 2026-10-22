@@ -3,6 +3,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { errorHandler } from './middlewares/error.middleware';
+import { metrics } from './lib/metrics';
 
 import authRoutes from './routes/auth.route';
 import exerciseRoutes from './routes/exercise.route';
@@ -42,6 +43,12 @@ app.get('/', (req, res) => {
 
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', timestamp: new Date() });
+});
+
+// Prometheus Metrics Endpoint
+app.get('/metrics', (req, res) => {
+  res.setHeader('Content-Type', 'text/plain; version=0.0.4');
+  res.send(metrics.getMetricsAsPrometheusText());
 });
 
 // Routing API v1
