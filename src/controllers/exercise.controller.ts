@@ -18,6 +18,7 @@ export class ExerciseController {
           id: true,
           slug: true,
           name: true,
+          imageUrl: true,
           category: true,
           description: true,
           defaultSets: true,
