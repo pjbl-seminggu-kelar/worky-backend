@@ -10,4 +10,6 @@ router.get('/active', PlanController.getActivePlan);
 router.post('/generate', PlanController.generatePlan);
 router.put('/items/:itemId', PlanController.updatePlanItem);
 
+router.post('/rest-day/checkin', PlanController.claimRestDay);
+
 export default router;

@@ -1,5 +1,6 @@
 import { prisma } from '../config/db';
 import { AppError } from '../utils/errors';
+import { StreakService } from './streak.service';
 
 export class SessionService {
   static async startSession(
@@ -51,7 +52,7 @@ export class SessionService {
     return createdEvents;
   }
 
-  static async completeSession(userId: string, sessionId: string, summary: any) {
+ static async completeSession(userId: string, sessionId: string, summary: any) {
     const session = await prisma.workoutSession.findFirst({
       where: { id: sessionId, userId },
     });
@@ -83,7 +84,14 @@ export class SessionService {
       },
     });
 
-    return updatedSession;
+    // 2. TAMBAHKAN DI SINI: Cek apakah seluruh target exercise hari ini sudah selesai
+    const streakInfo = await StreakService.checkAndTriggerDailyStreak(userId);
+
+    // 3. Kembalikan data sesi beserta info streak terbaru ke frontend
+    return {
+      ...updatedSession,
+      streakInfo, // berisi: { isCompletedToday: boolean, currentStreakDays: number }
+    };
   }
 
   static async getUserHistory(userId: string) {

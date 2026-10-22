@@ -94,6 +94,8 @@ model User {
   preferences            Json?           @default("{}")
   reminderTime           String?         @map("reminder_time") @db.VarChar(10) // e.g. "18:30"
   streakWeeks            Int             @default(0) @map("streak_weeks")
+  currentStreakDays      Int             @default(0) @map("current_streak_days")
+  lastCompletedDate      DateTime?       @map("last_completed_date") @db.Date
   createdAt              DateTime        @default(now()) @map("created_at")
   updatedAt              DateTime        @updatedAt @map("updated_at")
 
