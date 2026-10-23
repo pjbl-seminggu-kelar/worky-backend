@@ -2,6 +2,7 @@
 import { prisma } from '../config/db';
 import { AppError } from '../utils/errors';
 import { Exercise, Prisma } from '../app/generated/prisma';
+import { StreakService } from './streak.service';
 
 // 1. Mapping Normalisasi Input Equipment dari Frontend
 const EQUIPMENT_MAP: Record<string, string> = {
@@ -185,12 +186,19 @@ export class PlanService {
   }
 
   static async getActivePlan(userId: string) {
+    await StreakService.evaluateAndGetStreak(userId);
     return prisma.workoutPlan.findFirst({
       where: { userId, status: 'ACTIVE' },
       include: {
         workoutPlanItems: {
           include: { exercise: true },
           orderBy: [{ dayOfWeek: 'asc' }, { orderIndex: 'asc' }],
+        },
+        user: {
+          select: {
+            currentStreakDays: true,
+            lastCompletedDate: true,
+          },
         },
       },
     });

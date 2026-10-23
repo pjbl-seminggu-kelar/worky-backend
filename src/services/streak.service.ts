@@ -11,6 +11,36 @@ export class StreakService {
     return day === 0 ? 7 : day;
   }
 
+  static async evaluateAndGetStreak(userId: string): Promise<number> {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return 0;
+
+    // Jika belum pernah latihan sama sekali, kembalikan nilai saat ini
+    if (!user.lastCompletedDate) {
+      return user.currentStreakDays;
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const lastDate = new Date(user.lastCompletedDate);
+    lastDate.setHours(0, 0, 0, 0);
+
+    const diffInTime = today.getTime() - lastDate.getTime();
+    const diffInDays = Math.round(diffInTime / (1000 * 3600 * 24));
+
+    // Jika terlewat lebih dari 1 hari (kemarin bolos), reset streak ke 0
+    if (diffInDays > 1 && user.currentStreakDays > 0) {
+      const updatedUser = await prisma.user.update({
+        where: { id: userId },
+        data: { currentStreakDays: 0 },
+      });
+      return updatedUser.currentStreakDays;
+    }
+
+    return user.currentStreakDays;
+  }
+
   /**
    * Memproses penambahan/reset streak user
    */
