@@ -35,3 +35,9 @@ Thumbs.db
 
 # Testing & Coverage
 coverage/
+
+.agents
+skills-lock.json
+
+system_user_workflow_worky.md
+prd_worky.md

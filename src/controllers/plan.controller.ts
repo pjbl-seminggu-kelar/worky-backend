@@ -17,6 +17,16 @@ export class PlanController {
     }
   }
 
+  static async getWeeklyStreak(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.id;
+      const weeklyStreak = await StreakService.getWeeklyStreak(userId);
+      res.status(200).json({ status: 'success', data: weeklyStreak });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   static async generatePlan(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const userId = req.user!.id;

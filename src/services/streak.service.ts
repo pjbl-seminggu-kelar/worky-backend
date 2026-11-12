@@ -1,6 +1,27 @@
 import { prisma } from '../config/db';
 import { AppError } from '../utils/errors';
 
+export interface WeeklyStreakDay {
+  dayOfWeek: number;
+  label: string;
+  date: string;
+  isToday: boolean;
+  isWorkoutDay: boolean;
+  isChecked: boolean;
+  status: 'COMPLETED' | 'REST_CLAIMED' | 'PENDING' | 'MISSED';
+}
+
+export interface WeeklyStreakResponse {
+  currentStreakDays: number;
+  lastCompletedDate: Date | null;
+  weeklySummary: {
+    completedSessions: number;
+    targetSessions: number;
+    remainingSessions: number;
+  };
+  days: WeeklyStreakDay[];
+}
+
 export class StreakService {
   /**
    * Helper untuk konversi hari Javascript (0=Minggu, 1=Senin) 
@@ -11,7 +32,7 @@ export class StreakService {
     return day === 0 ? 7 : day;
   }
 
-  static async evaluateAndGetStreak(userId: string): Promise<number> {
+  static async evaluateAndGetStreak(userId: string, referenceDate: Date = new Date()): Promise<number> {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return 0;
 
@@ -20,7 +41,7 @@ export class StreakService {
       return user.currentStreakDays;
     }
 
-    const today = new Date();
+    const today = new Date(referenceDate);
     today.setHours(0, 0, 0, 0);
 
     const lastDate = new Date(user.lastCompletedDate);
@@ -170,5 +191,175 @@ export class StreakService {
 
     const newStreak = await this.processDailyStreak(userId);
     return { message: 'Hari istirahat berhasil diklaim!', currentStreakDays: newStreak };
+  }
+
+  /**
+   * Menghitung status streak dan ringkasan sesi untuk kartu "MINGGU INI" (Senin - Minggu)
+   */
+  static async getWeeklyStreak(userId: string, referenceDate: Date = new Date()): Promise<WeeklyStreakResponse> {
+    // 1. Lazy evaluation streak harian
+    await this.evaluateAndGetStreak(userId, referenceDate);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        currentStreakDays: true,
+        lastCompletedDate: true,
+        sessionsPerWeek: true,
+      },
+    });
+
+    if (!user) {
+      throw new AppError(404, 'User tidak ditemukan');
+    }
+
+    // 2. Rentang waktu minggu ini (Senin 00:00:00.000 - Minggu 23:59:59.999)
+    const today = new Date(referenceDate);
+    today.setHours(0, 0, 0, 0);
+
+    const currentDayOfWeek = this.getPrismaDayOfWeek(today); // 1 = Senin, ..., 7 = Minggu
+    const diffToMonday = currentDayOfWeek - 1;
+
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+
+    // 3. Ambil plan aktif beserta items
+    const activePlan = await prisma.workoutPlan.findFirst({
+      where: { userId, status: 'ACTIVE' },
+      include: {
+        workoutPlanItems: true,
+      },
+    });
+
+    // 4. Ambil seluruh sesi latihan COMPLETED pada rentang Senin - Minggu berjalan
+    const completedSessions = await prisma.workoutSession.findMany({
+      where: {
+        userId,
+        status: 'COMPLETED',
+        completedAt: {
+          gte: monday,
+          lte: sunday,
+        },
+      },
+      select: {
+        exerciseId: true,
+        completedAt: true,
+      },
+    });
+
+    const lastDate = user.lastCompletedDate ? new Date(user.lastCompletedDate) : null;
+    if (lastDate) {
+      lastDate.setHours(0, 0, 0, 0);
+    }
+
+    const LABELS = ['S', 'S', 'R', 'K', 'J', 'S', 'M'];
+    const days: WeeklyStreakDay[] = [];
+
+    for (let i = 1; i <= 7; i++) {
+      const dayDate = new Date(monday);
+      dayDate.setDate(monday.getDate() + (i - 1));
+      dayDate.setHours(0, 0, 0, 0);
+
+      const dayStart = new Date(dayDate);
+      dayStart.setHours(0, 0, 0, 0);
+
+      const dayEnd = new Date(dayDate);
+      dayEnd.setHours(23, 59, 59, 999);
+
+      const formatYear = dayDate.getFullYear();
+      const formatMonth = String(dayDate.getMonth() + 1).padStart(2, '0');
+      const formatDay = String(dayDate.getDate()).padStart(2, '0');
+      const dateString = `${formatYear}-${formatMonth}-${formatDay}`;
+
+      const isToday = dayDate.getTime() === today.getTime();
+
+      // Sesi yang diselesaikan pada tanggal ini
+      const daySessions = completedSessions.filter((session) => {
+        if (!session.completedAt) return false;
+        const sessionTime = new Date(session.completedAt).getTime();
+        return sessionTime >= dayStart.getTime() && sessionTime <= dayEnd.getTime();
+      });
+
+      // Cek apakah ada jadwal latihan di hari ini
+      const scheduledItems = activePlan?.workoutPlanItems.filter((item) => item.dayOfWeek === i) || [];
+      const isWorkoutDay = scheduledItems.length > 0;
+
+      let isChecked = false;
+      let status: 'COMPLETED' | 'REST_CLAIMED' | 'PENDING' | 'MISSED' = 'PENDING';
+
+      if (isWorkoutDay) {
+        const requiredExerciseIds = scheduledItems.map((item) => item.exerciseId);
+        const completedExerciseIds = new Set(daySessions.map((s) => s.exerciseId));
+        const isAllDone =
+          requiredExerciseIds.length > 0 &&
+          requiredExerciseIds.every((id) => completedExerciseIds.has(id));
+
+        if (isAllDone) {
+          status = 'COMPLETED';
+          isChecked = true;
+        } else {
+          status = dayDate.getTime() < today.getTime() ? 'MISSED' : 'PENDING';
+          isChecked = false;
+        }
+      } else {
+        // Rest Day
+        const hasExtraSession = daySessions.length > 0;
+        let isClaimedOrActiveInStreak = false;
+
+        if (lastDate) {
+          const diffDays = Math.round((dayDate.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
+          const isExactLastCompleted = diffDays === 0;
+          const isInActiveStreak =
+            user.currentStreakDays > 0 &&
+            diffDays >= -(user.currentStreakDays - 1) &&
+            diffDays <= 0;
+
+          isClaimedOrActiveInStreak = isExactLastCompleted || isInActiveStreak;
+        }
+
+        const isRestClaimed = hasExtraSession || isClaimedOrActiveInStreak;
+
+        if (isRestClaimed) {
+          status = 'REST_CLAIMED';
+          isChecked = true;
+        } else {
+          status = dayDate.getTime() < today.getTime() ? 'MISSED' : 'PENDING';
+          isChecked = false;
+        }
+      }
+
+      days.push({
+        dayOfWeek: i,
+        label: LABELS[i - 1],
+        date: dateString,
+        isToday,
+        isWorkoutDay,
+        isChecked,
+        status,
+      });
+    }
+
+    // 5. Ringkasan target sesi mingguan
+    const completedSessionsCount = days.filter((d) => d.isWorkoutDay && d.status === 'COMPLETED').length;
+    const scheduledDaysCount = days.filter((d) => d.isWorkoutDay).length;
+    const targetSessions = scheduledDaysCount > 0 ? scheduledDaysCount : (user.sessionsPerWeek || 0);
+    const remainingSessions = Math.max(0, targetSessions - completedSessionsCount);
+
+    return {
+      currentStreakDays: user.currentStreakDays,
+      lastCompletedDate: user.lastCompletedDate,
+      weeklySummary: {
+        completedSessions: completedSessionsCount,
+        targetSessions,
+        remainingSessions,
+      },
+      days,
+    };
   }
 }

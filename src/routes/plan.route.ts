@@ -7,6 +7,7 @@ const router = Router();
 router.use(authenticate);
 
 router.get('/active', PlanController.getActivePlan);
+router.get('/weekly-streak', PlanController.getWeeklyStreak);
 router.post('/generate', PlanController.generatePlan);
 router.put('/items/:itemId', PlanController.updatePlanItem);
 
