@@ -1,11 +1,20 @@
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { prisma } from '../src/config/db';
 import { StreakService } from '../src/services/streak.service';
+import { SessionService } from '../src/services/session.service';
 import { PlanController } from '../src/controllers/plan.controller';
 import planRouter from '../src/routes/plan.route';
+import sessionRouter from '../src/routes/session.route';
 
 describe('StreakService - getWeeklyStreak', () => {
+  beforeEach(() => {
+    (prisma as any).restDayCheckin = {
+      findMany: async () => [],
+      upsert: async () => ({}),
+    };
+  });
+
   it('should reset currentStreakDays to 0 if user missed yesterday (Lazy Evaluation)', async () => {
     const originalFindUnique = prisma.user.findUnique;
     const originalUpdate = prisma.user.update;
@@ -433,5 +442,143 @@ describe('PlanRouter - /weekly-streak route', () => {
       (s: any) => s.route && s.route.path === '/weekly-streak' && s.route.methods.get
     );
     assert.ok(layer, 'Route GET /weekly-streak should be registered in plan router');
+  });
+});
+
+describe('StreakService - RestDayCheckin Persistence', () => {
+  it('should retain REST_CLAIMED status from restDayCheckin table even if streak was later reset to 0', async () => {
+    const originalFindUnique = prisma.user.findUnique;
+    const originalUpdate = prisma.user.update;
+    const originalFindFirst = prisma.workoutPlan.findFirst;
+    const originalFindMany = prisma.workoutSession.findMany;
+    const originalRestDayCheckin = (prisma as any).restDayCheckin;
+
+    try {
+      // Reference date: Thursday 2026-11-12
+      const referenceDate = new Date('2026-11-12T10:00:00.000Z');
+
+      // User missed Wednesday, so streak was reset to 0, but Tuesday was claimed in restDayCheckins
+      const mockUser = {
+        id: 'user-checkin-table',
+        currentStreakDays: 0,
+        lastCompletedDate: new Date('2026-11-10T00:00:00.000Z'),
+        sessionsPerWeek: 2,
+      };
+
+      prisma.user.findUnique = (async () => mockUser) as any;
+      prisma.user.update = (async () => mockUser) as any;
+      prisma.workoutPlan.findFirst = (async () => ({
+        id: 'plan-c',
+        status: 'ACTIVE',
+        workoutPlanItems: [
+          { dayOfWeek: 1, exerciseId: 'ex-1' },
+          { dayOfWeek: 3, exerciseId: 'ex-1' },
+        ],
+      })) as any;
+      prisma.workoutSession.findMany = (async () => []) as any;
+
+      (prisma as any).restDayCheckin = {
+        findMany: async () => [
+          { checkinDate: new Date('2026-11-09T00:00:00.000Z') },
+          { checkinDate: new Date('2026-11-10T00:00:00.000Z') }, // Tuesday rest day
+        ],
+      };
+
+      const result = await StreakService.getWeeklyStreak('user-checkin-table', referenceDate);
+
+      // Tuesday (day 2) is Rest Day and exists in restDayCheckins -> REST_CLAIMED
+      assert.equal(result.days[1].isWorkoutDay, false);
+      assert.equal(result.days[1].isChecked, true);
+      assert.equal(result.days[1].status, 'REST_CLAIMED');
+    } finally {
+      prisma.user.findUnique = originalFindUnique;
+      prisma.user.update = originalUpdate;
+      prisma.workoutPlan.findFirst = originalFindFirst;
+      prisma.workoutSession.findMany = originalFindMany;
+      (prisma as any).restDayCheckin = originalRestDayCheckin;
+    }
+  });
+});
+
+describe('SessionService - Auto-Abandon & Abandon Endpoint', () => {
+  it('should auto-abandon old IN_PROGRESS sessions when starting a new session', async () => {
+    const originalFindUnique = prisma.exercise.findUnique;
+    const originalUpdateMany = prisma.workoutSession.updateMany;
+    const originalCreate = prisma.workoutSession.create;
+
+    try {
+      let autoAbandonedCalled = false;
+
+      prisma.exercise.findUnique = (async () => ({
+        id: 'ex-pushup',
+        name: 'Push-up',
+      })) as any;
+
+      prisma.workoutSession.updateMany = (async ({ where, data }: any) => {
+        if (where.userId === 'user-s1' && where.status === 'IN_PROGRESS' && data.status === 'ABANDONED') {
+          autoAbandonedCalled = true;
+        }
+        return { count: 1 };
+      }) as any;
+
+      prisma.workoutSession.create = (async ({ data }: any) => ({
+        id: 'sess-new',
+        ...data,
+      })) as any;
+
+      const session = await SessionService.startSession('user-s1', {
+        exerciseId: 'ex-pushup',
+        modelVersion: 'v1.0',
+      });
+
+      assert.equal(autoAbandonedCalled, true);
+      assert.equal(session.status, 'IN_PROGRESS');
+    } finally {
+      prisma.exercise.findUnique = originalFindUnique;
+      prisma.workoutSession.updateMany = originalUpdateMany;
+      prisma.workoutSession.create = originalCreate;
+    }
+  });
+
+  it('should abandon an IN_PROGRESS session and reject abandoning a COMPLETED session', async () => {
+    const originalFindFirst = prisma.workoutSession.findFirst;
+    const originalUpdate = prisma.workoutSession.update;
+
+    try {
+      prisma.workoutSession.findFirst = (async ({ where }: any) => {
+        if (where.id === 'sess-in-progress') {
+          return { id: 'sess-in-progress', userId: where.userId, status: 'IN_PROGRESS' };
+        }
+        if (where.id === 'sess-completed') {
+          return { id: 'sess-completed', userId: where.userId, status: 'COMPLETED' };
+        }
+        return null;
+      }) as any;
+
+      prisma.workoutSession.update = (async ({ where, data }: any) => ({
+        id: where.id,
+        status: data.status,
+      })) as any;
+
+      const abandoned = await SessionService.abandonSession('user-s1', 'sess-in-progress');
+      assert.equal(abandoned.status, 'ABANDONED');
+
+      await assert.rejects(
+        async () => {
+          await SessionService.abandonSession('user-s1', 'sess-completed');
+        },
+        (err: any) => err.statusCode === 400
+      );
+    } finally {
+      prisma.workoutSession.findFirst = originalFindFirst;
+      prisma.workoutSession.update = originalUpdate;
+    }
+  });
+
+  it('should have POST /:id/abandon route registered in sessionRouter', () => {
+    const layer = sessionRouter.stack.find(
+      (s: any) => s.route && s.route.path === '/:id/abandon' && s.route.methods.post
+    );
+    assert.ok(layer, 'Route POST /:id/abandon should be registered in session router');
   });
 });

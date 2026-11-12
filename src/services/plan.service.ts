@@ -43,12 +43,6 @@ export class PlanService {
 
     const normalizedEquipment = rawEquipment.map((item) => EQUIPMENT_MAP[item] || item);
 
-    // Nonaktifkan plan aktif sebelumnya
-    await prisma.workoutPlan.updateMany({
-      where: { userId, status: 'ACTIVE' },
-      data: { status: 'ARCHIVED' },
-    });
-
     const allExercises = await prisma.exercise.findMany({ where: { isActive: true } });
     if (allExercises.length === 0) throw new AppError(400, 'Katalog latihan belum tersedia');
 
@@ -63,12 +57,8 @@ export class PlanService {
       ? availableExercises 
       : allExercises.filter((ex: Exercise) => !ex.equipmentRequired || (ex.equipmentRequired as string[]).length === 0);
 
-    const newPlan = await prisma.workoutPlan.create({
-      data: { userId, name, goal, status: 'ACTIVE' },
-    });
-
     const daysToSchedule = DAY_SCHEDULES[sessionsPerWeek] || [1, 3, 5];
-    const itemsData: Prisma.WorkoutPlanItemCreateManyInput[] = [];
+    const itemsWithoutPlanId: Omit<Prisma.WorkoutPlanItemCreateManyInput, 'planId'>[] = [];
 
     // Kelompokkan pool latihan berdasarkan kategori
     const upperPool = validPool.filter((ex) => ex.category === 'UPPER');
@@ -124,8 +114,7 @@ export class PlanService {
             break;
         }
 
-        itemsData.push({
-          planId: newPlan.id,
+        itemsWithoutPlanId.push({
           exerciseId: exercise.id,
           dayOfWeek,
           orderIndex: idx + 1, // 1, 2, 3 untuk membedakan urutan gerakan
@@ -137,7 +126,24 @@ export class PlanService {
       });
     }
 
-    await prisma.workoutPlanItem.createMany({ data: itemsData });
+    // Jalankan pengarsipan plan lama dan pembuatan plan baru secara atomik
+    await prisma.$transaction(async (tx) => {
+      await tx.workoutPlan.updateMany({
+        where: { userId, status: 'ACTIVE' },
+        data: { status: 'ARCHIVED' },
+      });
+
+      const newPlan = await tx.workoutPlan.create({
+        data: { userId, name, goal, status: 'ACTIVE' },
+      });
+
+      const itemsData: Prisma.WorkoutPlanItemCreateManyInput[] = itemsWithoutPlanId.map((item) => ({
+        ...item,
+        planId: newPlan.id,
+      }));
+
+      await tx.workoutPlanItem.createMany({ data: itemsData });
+    });
 
     return this.getActivePlan(userId);
   }

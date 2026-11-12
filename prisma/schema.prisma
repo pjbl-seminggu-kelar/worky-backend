@@ -101,6 +101,7 @@ model User {
 
   workoutPlans    WorkoutPlan[]
   workoutSessions WorkoutSession[]
+  restDayCheckins RestDayCheckin[]
 
   @@map("users")
 }
@@ -145,6 +146,7 @@ model WorkoutPlan {
   workoutPlanItems WorkoutPlanItem[]
   workoutSessions  WorkoutSession[]
 
+  @@index([userId, status])
   @@map("workout_plans")
 }
 
@@ -163,6 +165,7 @@ model WorkoutPlanItem {
   plan     WorkoutPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
   exercise Exercise    @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
 
+  @@index([planId, dayOfWeek])
   @@map("workout_plan_items")
 }
 
@@ -191,6 +194,8 @@ model WorkoutSession {
   exercise      Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Restrict)
   workoutEvents WorkoutEvent[]
 
+  @@index([userId, status, completedAt])
+  @@index([userId, createdAt])
   @@map("workout_sessions")
 }
 
@@ -212,4 +217,17 @@ model WorkoutEvent {
   @@index([sessionId])
   @@index([errorCode])
   @@map("workout_events")
+}
+
+model RestDayCheckin {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  checkinDate DateTime @map("checkin_date") @db.Date
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, checkinDate])
+  @@index([userId, checkinDate])
+  @@map("rest_day_checkins")
 }

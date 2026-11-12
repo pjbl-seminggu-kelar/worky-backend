@@ -53,4 +53,15 @@ export class SessionController {
       next(err);
     }
   }
+
+  static async abandon(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.id;
+      const sessionId = req.params.id as string;
+      const result = await SessionService.abandonSession(userId, sessionId);
+      res.status(200).json({ status: 'success', data: result });
+    } catch (err) {
+      next(err);
+    }
+  }
 }

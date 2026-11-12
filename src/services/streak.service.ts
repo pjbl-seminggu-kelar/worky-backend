@@ -173,6 +173,7 @@ export class StreakService {
    */
   static async claimRestDay(userId: string) {
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
     const currentDayOfWeek = this.getPrismaDayOfWeek(today);
 
     const activePlan = await prisma.workoutPlan.findFirst({
@@ -187,6 +188,27 @@ export class StreakService {
     // Validasi: Rest Day hanya bisa diklaim jika memang TIDAK ADA jadwal latihan hari ini
     if (activePlan && activePlan.workoutPlanItems.length > 0) {
       throw new AppError(400, 'Hari ini ada jadwal latihan. Selesaikan semua sesi latihanmu untuk menyalakan streak!');
+    }
+
+    // Simpan riwayat klaim ke tabel rest_day_checkins
+    if ((prisma as any).restDayCheckin?.upsert) {
+      try {
+        await (prisma as any).restDayCheckin.upsert({
+          where: {
+            userId_checkinDate: {
+              userId,
+              checkinDate: today,
+            },
+          },
+          update: {},
+          create: {
+            userId,
+            checkinDate: today,
+          },
+        });
+      } catch {
+        // Fallback aman jika tabel rest_day_checkins belum dimigrasi
+      }
     }
 
     const newStreak = await this.processDailyStreak(userId);
@@ -236,6 +258,7 @@ export class StreakService {
         workoutPlanItems: true,
       },
     });
+    
 
     // 4. Ambil seluruh sesi latihan COMPLETED pada rentang Senin - Minggu berjalan
     const completedSessions = await prisma.workoutSession.findMany({
@@ -252,6 +275,27 @@ export class StreakService {
         completedAt: true,
       },
     });
+
+    // Ambil riwayat klaim rest day pada rentang Senin - Minggu berjalan
+    let restDayCheckins: Array<{ checkinDate: Date }> = [];
+    if ((prisma as any).restDayCheckin?.findMany) {
+      try {
+        restDayCheckins = await (prisma as any).restDayCheckin.findMany({
+          where: {
+            userId,
+            checkinDate: {
+              gte: monday,
+              lte: sunday,
+            },
+          },
+          select: {
+            checkinDate: true,
+          },
+        });
+      } catch {
+        restDayCheckins = [];
+      }
+    }
 
     const lastDate = user.lastCompletedDate ? new Date(user.lastCompletedDate) : null;
     if (lastDate) {
@@ -310,6 +354,13 @@ export class StreakService {
       } else {
         // Rest Day
         const hasExtraSession = daySessions.length > 0;
+        const hasCheckinRecord = restDayCheckins.some((checkin) => {
+          const cDate = new Date(checkin.checkinDate);
+          cDate.setHours(0, 0, 0, 0);
+          const diff = Math.round((dayDate.getTime() - cDate.getTime()) / (1000 * 3600 * 24));
+          return diff === 0;
+        });
+
         let isClaimedOrActiveInStreak = false;
 
         if (lastDate) {
@@ -323,7 +374,7 @@ export class StreakService {
           isClaimedOrActiveInStreak = isExactLastCompleted || isInActiveStreak;
         }
 
-        const isRestClaimed = hasExtraSession || isClaimedOrActiveInStreak;
+        const isRestClaimed = hasCheckinRecord || hasExtraSession || isClaimedOrActiveInStreak;
 
         if (isRestClaimed) {
           status = 'REST_CLAIMED';

@@ -12,6 +12,14 @@ export class SessionService {
       throw new AppError(404, 'Latihan tidak ditemukan');
     }
 
+    // Auto-abandon sesi IN_PROGRESS lama yang menggantung milik user ini
+    if ((prisma.workoutSession as any)?.updateMany) {
+      await prisma.workoutSession.updateMany({
+        where: { userId, status: 'IN_PROGRESS' },
+        data: { status: 'ABANDONED' },
+      });
+    }
+
     const session = await prisma.workoutSession.create({
       data: {
         userId,
@@ -106,5 +114,28 @@ export class SessionService {
     });
 
     return sessions;
+  }
+
+  static async abandonSession(userId: string, sessionId: string) {
+    const session = await prisma.workoutSession.findFirst({
+      where: { id: sessionId, userId },
+    });
+
+    if (!session) {
+      throw new AppError(404, 'Sesi latihan tidak ditemukan');
+    }
+
+    if (session.status === 'COMPLETED') {
+      throw new AppError(400, 'Sesi latihan yang sudah selesai tidak dapat dibatalkan');
+    }
+
+    const updatedSession = await prisma.workoutSession.update({
+      where: { id: sessionId },
+      data: {
+        status: 'ABANDONED',
+      },
+    });
+
+    return updatedSession;
   }
 }
