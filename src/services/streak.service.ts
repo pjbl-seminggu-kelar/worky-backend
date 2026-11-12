@@ -24,6 +24,42 @@ export interface WeeklyStreakResponse {
 
 export class StreakService {
   /**
+   * Helper untuk mengonversi Date ke info tanggal kalender dalam timezone pengguna (default: Asia/Jakarta)
+   */
+  private static getZonedDateInfo(date: Date = new Date(), timeZone: string = 'Asia/Jakarta') {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      weekday: 'short',
+    });
+    const parts = formatter.formatToParts(date);
+    const year = parts.find((p) => p.type === 'year')!.value;
+    const month = parts.find((p) => p.type === 'month')!.value;
+    const day = parts.find((p) => p.type === 'day')!.value;
+    const weekday = parts.find((p) => p.type === 'weekday')!.value;
+
+    const dayMap: Record<string, number> = {
+      Mon: 1,
+      Tue: 2,
+      Wed: 3,
+      Thu: 4,
+      Fri: 5,
+      Sat: 6,
+      Sun: 7,
+    };
+
+    return {
+      year: Number(year),
+      month: Number(month),
+      day: Number(day),
+      dayOfWeek: dayMap[weekday] || 1,
+      ymd: `${year}-${month}-${day}`,
+    };
+  }
+
+  /**
    * Helper untuk konversi hari Javascript (0=Minggu, 1=Senin) 
    * ke standar Prisma (1=Senin, 7=Minggu)
    */
@@ -32,7 +68,11 @@ export class StreakService {
     return day === 0 ? 7 : day;
   }
 
-  static async evaluateAndGetStreak(userId: string, referenceDate: Date = new Date()): Promise<number> {
+  static async evaluateAndGetStreak(
+    userId: string,
+    referenceDate: Date = new Date(),
+    timeZone: string = 'Asia/Jakarta'
+  ): Promise<number> {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) return 0;
 
@@ -41,13 +81,12 @@ export class StreakService {
       return user.currentStreakDays;
     }
 
-    const today = new Date(referenceDate);
-    today.setHours(0, 0, 0, 0);
+    const todayZoned = this.getZonedDateInfo(referenceDate, timeZone);
+    const lastDateZoned = this.getZonedDateInfo(new Date(user.lastCompletedDate), timeZone);
 
-    const lastDate = new Date(user.lastCompletedDate);
-    lastDate.setHours(0, 0, 0, 0);
-
-    const diffInTime = today.getTime() - lastDate.getTime();
+    const diffInTime =
+      new Date(`${todayZoned.ymd}T00:00:00.000Z`).getTime() -
+      new Date(`${lastDateZoned.ymd}T00:00:00.000Z`).getTime();
     const diffInDays = Math.round(diffInTime / (1000 * 3600 * 24));
 
     // Jika terlewat lebih dari 1 hari (kemarin bolos), reset streak ke 0
@@ -65,28 +104,29 @@ export class StreakService {
   /**
    * Memproses penambahan/reset streak user
    */
-  static async processDailyStreak(userId: string): Promise<number> {
+  static async processDailyStreak(userId: string, timeZone: string = 'Asia/Jakarta'): Promise<number> {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw new AppError(404, 'User tidak ditemukan');
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const todayZoned = this.getZonedDateInfo(new Date(), timeZone);
+    const today = new Date(`${todayZoned.ymd}T00:00:00.000Z`);
 
-    const lastDate = user.lastCompletedDate ? new Date(user.lastCompletedDate) : null;
-    if (lastDate) lastDate.setHours(0, 0, 0, 0);
+    const lastDateZoned = user.lastCompletedDate
+      ? this.getZonedDateInfo(new Date(user.lastCompletedDate), timeZone)
+      : null;
 
     // Jika hari ini sudah terhitung streak-nya, abaikan
-    if (lastDate && lastDate.getTime() === today.getTime()) {
+    if (lastDateZoned && lastDateZoned.ymd === todayZoned.ymd) {
       return user.currentStreakDays;
     }
 
     let newStreak = user.currentStreakDays;
 
-    if (!lastDate) {
+    if (!lastDateZoned) {
       // Streak pertama kali
       newStreak = 1;
     } else {
-      const diffInTime = today.getTime() - lastDate.getTime();
+      const diffInTime = today.getTime() - new Date(`${lastDateZoned.ymd}T00:00:00.000Z`).getTime();
       const diffInDays = Math.round(diffInTime / (1000 * 3600 * 24));
 
       if (diffInDays === 1) {
@@ -218,9 +258,13 @@ export class StreakService {
   /**
    * Menghitung status streak dan ringkasan sesi untuk kartu "MINGGU INI" (Senin - Minggu)
    */
-  static async getWeeklyStreak(userId: string, referenceDate: Date = new Date()): Promise<WeeklyStreakResponse> {
+  static async getWeeklyStreak(
+    userId: string,
+    referenceDate: Date = new Date(),
+    timeZone: string = 'Asia/Jakarta'
+  ): Promise<WeeklyStreakResponse> {
     // 1. Lazy evaluation streak harian
-    await this.evaluateAndGetStreak(userId, referenceDate);
+    await this.evaluateAndGetStreak(userId, referenceDate, timeZone);
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
@@ -236,20 +280,24 @@ export class StreakService {
       throw new AppError(404, 'User tidak ditemukan');
     }
 
-    // 2. Rentang waktu minggu ini (Senin 00:00:00.000 - Minggu 23:59:59.999)
-    const today = new Date(referenceDate);
-    today.setHours(0, 0, 0, 0);
-
-    const currentDayOfWeek = this.getPrismaDayOfWeek(today); // 1 = Senin, ..., 7 = Minggu
+    // 2. Rentang waktu minggu ini dalam Timezone pengguna (default: Asia/Jakarta)
+    const todayZoned = this.getZonedDateInfo(referenceDate, timeZone);
+    const currentDayOfWeek = todayZoned.dayOfWeek; // 1 = Senin, ..., 7 = Minggu
     const diffToMonday = currentDayOfWeek - 1;
 
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - diffToMonday);
-    monday.setHours(0, 0, 0, 0);
+    const baseTodayUtc = new Date(Date.UTC(todayZoned.year, todayZoned.month - 1, todayZoned.day));
+    const mondayUtc = new Date(baseTodayUtc);
+    mondayUtc.setUTCDate(baseTodayUtc.getUTCDate() - diffToMonday);
 
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    sunday.setHours(23, 59, 59, 999);
+    const sundayUtc = new Date(mondayUtc);
+    sundayUtc.setUTCDate(mondayUtc.getUTCDate() + 6);
+
+    const mondayYmd = mondayUtc.toISOString().split('T')[0];
+    const sundayYmd = sundayUtc.toISOString().split('T')[0];
+
+    // Batas query database mencakup rentang waktu WIB (+07:00)
+    const mondayStart = new Date(`${mondayYmd}T00:00:00.000+07:00`);
+    const sundayEnd = new Date(`${sundayYmd}T23:59:59.999+07:00`);
 
     // 3. Ambil plan aktif beserta items
     const activePlan = await prisma.workoutPlan.findFirst({
@@ -258,7 +306,6 @@ export class StreakService {
         workoutPlanItems: true,
       },
     });
-    
 
     // 4. Ambil seluruh sesi latihan COMPLETED pada rentang Senin - Minggu berjalan
     const completedSessions = await prisma.workoutSession.findMany({
@@ -266,8 +313,8 @@ export class StreakService {
         userId,
         status: 'COMPLETED',
         completedAt: {
-          gte: monday,
-          lte: sunday,
+          gte: mondayStart,
+          lte: sundayEnd,
         },
       },
       select: {
@@ -284,8 +331,8 @@ export class StreakService {
           where: {
             userId,
             checkinDate: {
-              gte: monday,
-              lte: sunday,
+              gte: mondayStart,
+              lte: sundayEnd,
             },
           },
           select: {
@@ -297,31 +344,23 @@ export class StreakService {
       }
     }
 
-    const lastDate = user.lastCompletedDate ? new Date(user.lastCompletedDate) : null;
-    if (lastDate) {
-      lastDate.setHours(0, 0, 0, 0);
-    }
+    const lastDateZoned = user.lastCompletedDate
+      ? this.getZonedDateInfo(new Date(user.lastCompletedDate), timeZone)
+      : null;
 
     const LABELS = ['S', 'S', 'R', 'K', 'J', 'S', 'M'];
     const days: WeeklyStreakDay[] = [];
 
     for (let i = 1; i <= 7; i++) {
-      const dayDate = new Date(monday);
-      dayDate.setDate(monday.getDate() + (i - 1));
-      dayDate.setHours(0, 0, 0, 0);
+      const dayUtc = new Date(mondayUtc);
+      dayUtc.setUTCDate(mondayUtc.getUTCDate() + (i - 1));
+      const dateString = dayUtc.toISOString().split('T')[0];
 
-      const dayStart = new Date(dayDate);
-      dayStart.setHours(0, 0, 0, 0);
+      const dayStart = new Date(`${dateString}T00:00:00.000+07:00`);
+      const dayEnd = new Date(`${dateString}T23:59:59.999+07:00`);
 
-      const dayEnd = new Date(dayDate);
-      dayEnd.setHours(23, 59, 59, 999);
-
-      const formatYear = dayDate.getFullYear();
-      const formatMonth = String(dayDate.getMonth() + 1).padStart(2, '0');
-      const formatDay = String(dayDate.getDate()).padStart(2, '0');
-      const dateString = `${formatYear}-${formatMonth}-${formatDay}`;
-
-      const isToday = dayDate.getTime() === today.getTime();
+      const isToday = dateString === todayZoned.ymd;
+      const isPast = dateString < todayZoned.ymd;
 
       // Sesi yang diselesaikan pada tanggal ini
       const daySessions = completedSessions.filter((session) => {
@@ -348,23 +387,25 @@ export class StreakService {
           status = 'COMPLETED';
           isChecked = true;
         } else {
-          status = dayDate.getTime() < today.getTime() ? 'MISSED' : 'PENDING';
+          status = isPast ? 'MISSED' : 'PENDING';
           isChecked = false;
         }
       } else {
         // Rest Day
         const hasExtraSession = daySessions.length > 0;
         const hasCheckinRecord = restDayCheckins.some((checkin) => {
-          const cDate = new Date(checkin.checkinDate);
-          cDate.setHours(0, 0, 0, 0);
-          const diff = Math.round((dayDate.getTime() - cDate.getTime()) / (1000 * 3600 * 24));
-          return diff === 0;
+          const cZoned = this.getZonedDateInfo(new Date(checkin.checkinDate), timeZone);
+          return cZoned.ymd === dateString;
         });
 
         let isClaimedOrActiveInStreak = false;
 
-        if (lastDate) {
-          const diffDays = Math.round((dayDate.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
+        if (lastDateZoned) {
+          const diffDays = Math.round(
+            (new Date(`${dateString}T00:00:00.000Z`).getTime() -
+              new Date(`${lastDateZoned.ymd}T00:00:00.000Z`).getTime()) /
+              (1000 * 3600 * 24)
+          );
           const isExactLastCompleted = diffDays === 0;
           const isInActiveStreak =
             user.currentStreakDays > 0 &&
@@ -380,7 +421,7 @@ export class StreakService {
           status = 'REST_CLAIMED';
           isChecked = true;
         } else {
-          status = dayDate.getTime() < today.getTime() ? 'MISSED' : 'PENDING';
+          status = isPast ? 'MISSED' : 'PENDING';
           isChecked = false;
         }
       }
