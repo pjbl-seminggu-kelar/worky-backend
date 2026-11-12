@@ -1,3 +1,6 @@
+// Kunci timezone default ke Asia/Jakarta (WIB)
+process.env.TZ = process.env.TZ || 'Asia/Jakarta';
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
